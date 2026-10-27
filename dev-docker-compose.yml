@@ -1,0 +1,46 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.5
+    container_name: keycloak-dev
+    restart: unless-stopped
+
+    command:
+      - start
+
+    ports:
+      - "127.0.0.1:8090:8080"
+
+    env_file:
+      - .env
+
+    environment:
+      # MySQL database on AWS RDS
+      KC_DB: mysql
+      KC_DB_URL: "jdbc:mysql://ticket-dev-db.cvey6c0ae1b3.us-east-1.rds.amazonaws.com:3306/keycloak_dev"
+      KC_DB_USERNAME: ${KC_DB_USERNAME:?Set KC_DB_USERNAME in .env}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?Set KC_DB_PASSWORD in .env}
+
+      # HTTPS is terminated by Nginx
+      KC_HOSTNAME: "auth.ticket.dev.sygnal.me"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
+
+      # Health endpoint
+      KC_HEALTH_ENABLED: "true"
+      KC_FEATURES: "token-exchange,admin-fine-grained-authz"
+      # Java memory
+      JAVA_OPTS_KC_HEAP: "-Xms512m -Xmx1024m"
+
+    mem_limit: 1536m
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
